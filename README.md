@@ -1,0 +1,1 @@
+A user friendly agent that plans in detail with input from you, has access to tools for web search , wikipedia search. 
