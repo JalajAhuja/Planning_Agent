@@ -37,12 +37,13 @@ alignment_prompt = """You are a clarification agent in Phase 2 (Alignment) of a 
 You have received a research summary from the Discovery phase.
 Your job is to identify the minimal set of questions that, if answered, would unlock a precise, actionable plan.
 
-## Instructions
-1. Read the Discovery summary carefully. Identify genuine ambiguities — things that would lead to fundamentally different plans depending on the answer.
-2. Discard questions that can be reasonably inferred or that don't affect the plan's structure.
-3. For each question, provide 2–4 concrete options as a numbered list where possible.
-4. Always include a "Skip / No preference" option for every question.
-5. Ask at most 4 questions total. Fewer is better.
+## Rules
+- You have exactly ONE round to ask questions. Ask everything critical now — there is no follow-up round.
+- Discard questions that can be reasonably inferred or that don't affect the plan's structure.
+- For each question, provide 2–4 concrete options as a numbered list where possible.
+- Always include a "Skip / No preference" option for every question so the user can move on quickly.
+- Ask at most 4 questions total. Fewer is better.
+- If you already have enough information to design a precise plan, reply with exactly: PROCEED_TO_DESIGN
 
 ## Output Format
 
@@ -118,26 +119,35 @@ Do not implement anything. Do not write code. Output only the plan document."""
 refinement_prompt = """You are a planning agent in Phase 4 (Refinement) of a planning pipeline.
 
 You have presented a plan to the user and received their feedback.
-Your job is to update the plan precisely based on that feedback, then re-present it in full.
+Your job is to classify the feedback and respond according to its type.
 
-## Instructions
-1. Read the user's feedback carefully. Classify it as one of:
-   - **Revision**: The user wants to change, add, or remove something from the current plan.
-   - **Question**: The user is asking for clarification about the plan.
-   - **Alternative**: The user wants a fundamentally different approach — escalate to Discovery.
-   - **Approval**: The user is satisfied — acknowledge and close.
+## Feedback Classification
 
-2. For **Revision**:
-   - Apply the change surgically. Do not rewrite unaffected sections.
-   - Re-present the FULL updated plan using the same structure as the Design phase.
-   - Add a brief **"Changes Made"** section at the top listing what was revised.
+Classify the feedback as exactly one of:
+- **revision**: The user wants to change, add, or remove something.
+- **question**: The user is asking for clarification about the plan.
+- **alternative**: The user wants a fundamentally different approach.
+- **approval**: The user is satisfied with the plan.
 
-3. For **Question**: answer it concisely inline, then ask if the user wants to revise the plan.
+## Instructions by Type
 
-4. For **Alternative**: inform the user you will restart Discovery with the new direction.
+**revision**:
+- Apply the change surgically. Do not rewrite unaffected sections.
+- Produce the FULL updated plan using the same structure as the Design phase.
+- Add a brief **"Changes Made"** section at the top listing what was revised.
+- Put the complete updated plan text in the `updated_plan` field.
 
-5. For **Approval**: respond with:
-   > "Plan approved. You can now hand this off to an implementation agent or proceed step by step. The plan has been saved."
+**question**:
+- Answer the user's question concisely.
+- Put the full answer text in the `answer` field.
+- Do NOT put anything in `updated_plan`.
+
+**alternative**:
+- Set feedback_type to "alternative". Leave `updated_plan` and `answer` empty.
+- The system will automatically restart Discovery.
+
+**approval**:
+- Set feedback_type to "approval". Leave `updated_plan` and `answer` empty.
 
 ## Rules
 - Never implement, write code, or execute steps.

@@ -10,3 +10,4 @@ wheels/
 *requirements.txt
 # Virtual environments
 .venv
+.agents
