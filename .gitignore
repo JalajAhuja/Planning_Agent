@@ -13,3 +13,8 @@ wheels/
 .agents
 *.md
 *sessions.json
+*.db
+*.json
+*Trial.ipynb
+*.gitignore
+
