@@ -1,42 +1,74 @@
-from typing import Annotated, List, Optional, Literal
+from typing import Annotated
+from typing_extensions import TypedDict, NotRequired
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
+
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 
 
 class PlannerState(TypedDict):
-    topic: str
-    messages: Annotated[List[BaseMessage], add_messages]  # full chat history, auto-appended
-    phase: str                                             # discovery | alignment | design | refinement | complete
-    research_summary: Optional[str]                       # output of Discovery phase
-    clarifying_questions: List[str]                       # questions generated in Alignment phase
-    user_answers: List[str]                               # user responses to clarifying questions
-    tool_outputs: List[str]                               # raw tool call results
-    plan_draft: Optional[str]                             # working plan Markdown (Design phase)
-    final_plan: Optional[str]                             # approved plan Markdown
-    approved: Optional[bool]                              # True once user approves the plan
-    refinement_action: Optional[str]                      # approve | revise | question | alternative
-    display_content: Optional[str]                        # content shown by present_plan node
+    # Entire conversation -- single source of truth
+    messages: Annotated[list[BaseMessage], add_messages]
+
+    # Discovery -> ResearchSummary
+    research_summary: NotRequired[str]
+
+    # Alignment
+    need_clarification: NotRequired[bool]
+    clarifying_questions: NotRequired[str]
+    user_answers: NotRequired[list[str]]
+
+    # Design
+    plan_draft: NotRequired[str | None]
+
+    # Refinement
+    approved: NotRequired[bool]
+
+    # Final output
+    final_plan: NotRequired[str | None]
+
+    # Path to the saved markdown file (set on approval)
+    plan_file_path: NotRequired[str | None]
+
 
 class RouterDecision(BaseModel):
-    need_clarification: bool
-    clarifying_questions: List[str]
-    user_answers: List[str]
-    max_questions: int
+    research_summary: str = Field(
+        description="Condensed research from Discovery."
+    )
+    need_clarification: bool = Field(
+        description="Whether user clarification is required."
+    )
+    clarifying_questions: str = Field(
+        description="Markdown containing every clarification question. Empty string if not needed."
+    )
 
-class Task(BaseModel):
-    id: int
-    title: str
-    goal: str = Field(..., description="One sentence describing what reader should do/understand")
-    bullets: List[str] = Field(..., min_length=3, max_length=6)
-    target_words: int = Field(..., description="Target words (120-550).")
-    tags: List[str] = Field(default_factory=list)
-    requires_research: bool = False
-    requires_code: bool = False
+
+class AlignmentDecision(BaseModel):
+    need_clarification: bool = Field(
+        description="Whether additional information is required from the user."
+    )
+    clarifying_questions: str = Field(
+        default="",
+        description=(
+            "Questions to ask the user if clarification is required. "
+            "Leave empty when need_clarification=False."
+        ),
+    )
+
 
 class FeedbackClassification(BaseModel):
-    feedback_type: Literal["revision", "question", "alternative", "approval"]
-    updated_plan: Optional[str] = None  # populated for "revision"
-    answer: Optional[str] = None        # populated for "question"
-
+    feedback_type: str = Field(
+        description="One of: approval, revision, question, alternative."
+    )
+    updated_plan: str = Field(
+        default="",
+        description="The complete updated plan text. Only populated for revision.",
+    )
+    answer: str = Field(
+        default="",
+        description="Answer to user question. Only populated for question.",
+    )
+    restart_discovery: bool = Field(
+        default=False,
+        description="Set to True when feedback_type is alternative.",
+    )
