@@ -51,40 +51,57 @@ def research_summary(state: PlannerState) -> dict:
     }
 
 
-# ── Node: alignment ───────────────────────────────────────────────────────────
+# ── Node: alignment_decide ───────────────────────────────────────────────────
 
-def alignment(state: PlannerState) -> dict:
-    """Phase 2 — Ask ONE round of clarification if needed.
+def alignment_decide(state: PlannerState) -> dict:
+    """Phase 2a — LLM decides whether clarification is needed.
 
-    If no clarification needed, continues directly to Design.
-    Uses interrupt() to pause for user answers.
+    Commits the decision (need_clarification, clarifying_questions) to the
+    checkpoint so that alignment_collect can read it on the next node run.
+    This node never calls interrupt() — that keeps it safe from the LangGraph
+    re-run-on-resume behaviour.
     """
+    # Include the original user request so the LLM knows the topic.
+    msgs = state.get("messages", [])
+    original_request = next(
+        (m.content for m in msgs if isinstance(m, HumanMessage)), ""
+    )
+
     decision = alignment_llm.invoke(
         [
             SystemMessage(content=alignment_prompt),
             HumanMessage(
-                content=f"Research Summary:\n{state.get('research_summary', '')}"
+                content=(
+                    f"Original Request:\n{original_request}\n\n"
+                    f"Research Summary:\n{state.get('research_summary', '')}"
+                )
             ),
         ]
     )
 
-    if not decision.need_clarification:
-        return {
-            "need_clarification": False,
-            "clarifying_questions": "",
-            "user_answers": [],
-        }
+    return {
+        "need_clarification": decision.need_clarification,
+        "clarifying_questions": decision.clarifying_questions,
+    }
 
-    answers = interrupt(decision.clarifying_questions)
+
+# ── Node: alignment_collect ───────────────────────────────────────────────────
+
+def alignment_collect(state: PlannerState) -> dict:
+    """Phase 2b — Interrupt to collect user answers.
+
+    This node contains the ONLY interrupt() call for alignment.  It is
+    intentionally free of any LLM calls so that re-running from the top on
+    resume is completely safe: the questions are already committed to state by
+    alignment_decide, and interrupt() simply returns the resume value.
+    """
+    questions = state.get("clarifying_questions", "")
+    answers = interrupt(questions)
 
     if isinstance(answers, str):
         answers = [answers]
 
-    return {
-        "need_clarification": True,
-        "clarifying_questions": decision.clarifying_questions,
-        "user_answers": answers,
-    }
+    return {"user_answers": answers}
 
 
 # ── Node: design ──────────────────────────────────────────────────────────────

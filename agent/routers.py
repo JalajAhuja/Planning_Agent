@@ -16,6 +16,15 @@ def route_after_discovery(
     return "research_summary"
 
 
+def route_after_alignment_decide(
+    state: PlannerState,
+) -> Literal["alignment_collect", "design"]:
+    """Route to alignment_collect if clarification is needed, else skip to design."""
+    if state.get("need_clarification") and state.get("clarifying_questions"):
+        return "alignment_collect"
+    return "design"
+
+
 def route_after_refinement(
     state: PlannerState,
 ) -> Literal["__end__", "present_plan", "discovery"]:
